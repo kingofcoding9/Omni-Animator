@@ -53,12 +53,33 @@ export function renderProjectFrameToSvgString(project: Project, frame: number): 
           const imgSource = getAssetOrUrl(layer.imageUrl, assets);
           return `<image href="${imgSource}" x="${xOffset}" y="${yOffset}" width="${props.width}" height="${props.height}" transform="rotate(${props.rotation}, ${props.x}, ${props.y})" preserveAspectRatio="xMidYMid slice" ${sharedProps} />`;
         }
-        case 'freeform': {
-          if (!layer.freeformPoints || layer.freeformPoints.length === 0) return '';
-          const pathData = layer.freeformPoints.map((p, i) => 
-            `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`
-          ).join(' ');
-          return `<path d="${pathData}" fill="none" stroke="${fillColor}" stroke-width="${strokeWidth || 4}" stroke-linecap="round" stroke-linejoin="round" transform="translate(${props.x}, ${props.y}) rotate(${props.rotation}) scale(${props.scaleX}, ${props.scaleY})" ${sharedProps} />`;
+        case 'freeform':
+        case 'brush': {
+          const isBrush = layer.type === 'brush';
+          const points = isBrush ? layer.brushPoints : layer.freeformPoints;
+          if (!points || points.length === 0) return '';
+          
+          let pathData = '';
+          const smoothingAmount = isBrush ? (layer.brushSmoothing ?? 0.5) : (layer.freeformSmoothing ? 1 : 0);
+          
+          if (smoothingAmount === 0 || points.length < 3) {
+            pathData = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+          } else {
+            pathData = `M ${points[0].x} ${points[0].y}`;
+            for (let i = 1; i < points.length - 2; i++) {
+              const xc = (points[i].x + points[i + 1].x) / 2;
+              const yc = (points[i].y + points[i + 1].y) / 2;
+              pathData += ` Q ${points[i].x} ${points[i].y}, ${xc} ${yc}`;
+            }
+            pathData += ` Q ${points[points.length - 2].x} ${points[points.length - 2].y}, ${points[points.length - 1].x} ${points[points.length - 1].y}`;
+          }
+
+          const activeStroke = strokeWidth > 0 ? strokeColor : fillColor;
+          const cap = layer.strokeLinecap || 'round';
+          const join = layer.strokeLinejoin || 'round';
+          const fill = fillColor === 'transparent' ? 'none' : fillColor;
+
+          return `<path d="${pathData}" fill="${fill}" stroke="${activeStroke}" stroke-width="${strokeWidth || 4}" stroke-linecap="${cap}" stroke-linejoin="${join}" transform="translate(${props.x}, ${props.y}) rotate(${props.rotation}) scale(${props.scaleX}, ${props.scaleY})" ${sharedProps} />`;
         }
         default:
           return '';

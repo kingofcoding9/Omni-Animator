@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type ShapeType = 'circle' | 'square' | 'rectangle' | 'line' | 'text' | 'image' | 'freeform';
+export type ShapeType = 'circle' | 'square' | 'rectangle' | 'line' | 'text' | 'image' | 'freeform' | 'brush';
 
 export interface Point {
   x: number;
@@ -38,8 +38,13 @@ export interface Layer {
   locked: boolean;
   text?: string;        // for text shapes
   imageUrl?: string;    // for image shapes (URL or asset ID reference or data URL)
-  freeformPoints?: Point[]; // for freeform drawing
-  freeformSmoothing?: boolean; // smoothing enabled
+  freeformPoints?: Point[]; // for legacy freeform drawing
+  freeformSmoothing?: boolean; // legacy smoothing
+  brushPoints?: Point[];
+  brushSmoothing?: number; 
+  brushType?: 'pencil' | 'smooth' | 'marker';
+  strokeLinecap?: 'round' | 'square' | 'butt';
+  strokeLinejoin?: 'round' | 'bevel' | 'miter';
   keyframes: Keyframe[]; // sorted by frame ascending
 }
 

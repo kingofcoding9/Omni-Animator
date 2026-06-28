@@ -27,6 +27,8 @@ interface AnimationStageProps {
   gridSnap: boolean;
   onUpdateLayerProperty: (layerId: string, property: keyof Keyframe, value: any) => void;
   onStartTransaction?: () => void;
+  onCommitTransaction?: () => void;
+  onCancelTransaction?: () => void;
   onSelectLayer: (id: string | null) => void;
   onAddFreeformLayer: (points: Point[], center: Point) => void;
   activeTool: 'circle' | 'square' | 'rectangle' | 'line' | 'text' | 'image' | 'freeform' | 'select' | 'drawing';
@@ -45,6 +47,8 @@ export default function AnimationStage({
   gridSnap,
   onUpdateLayerProperty,
   onStartTransaction,
+  onCommitTransaction,
+  onCancelTransaction,
   onSelectLayer,
   onAddFreeformLayer,
   activeTool,
@@ -317,29 +321,89 @@ export default function AnimationStage({
     };
 
     const onUp = () => {
-      if (dragInfo.current.type === 'draw') {
+      cleanup();
+      const type = dragInfo.current.type;
+      if (type === 'draw') {
         finishDrawing();
+      } else if (type === 'move' || type === 'resize' || type === 'rotate') {
+        if (onCommitTransaction) onCommitTransaction();
       }
       dragInfo.current.type = null;
+    };
+
+    const onCancel = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        cleanup();
+        const type = dragInfo.current.type;
+        if (type === 'draw') {
+          drawingPointsRef.current = [];
+          if (activeStrokeRef.current) activeStrokeRef.current.style.display = 'none';
+        } else if (type === 'move' || type === 'resize' || type === 'rotate') {
+          if (onCancelTransaction) onCancelTransaction();
+        }
+        dragInfo.current.type = null;
+      }
+    };
+
+    const cleanup = () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
       window.removeEventListener('touchmove', onMove);
       window.removeEventListener('touchend', onUp);
+      window.removeEventListener('keydown', onCancel);
     };
 
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
     window.addEventListener('touchmove', onMove, { passive: false });
     window.addEventListener('touchend', onUp);
+    window.addEventListener('keydown', onCancel);
+  };
+
+  const simplifyPoints = (points: Point[], tolerance: number): Point[] => {
+    if (points.length <= 2) return points;
+
+    let dmax = 0;
+    let index = 0;
+    const end = points.length - 1;
+
+    for (let i = 1; i < end; i++) {
+      const p = points[i];
+      const p1 = points[0];
+      const p2 = points[end];
+
+      // Perpendicular distance from p to line(p1, p2)
+      const num = Math.abs((p2.y - p1.y) * p.x - (p2.x - p1.x) * p.y + p2.x * p1.y - p2.y * p1.x);
+      const den = Math.sqrt(Math.pow(p2.y - p1.y, 2) + Math.pow(p2.x - p1.x, 2));
+      const d = num / den;
+
+      if (d > dmax) {
+        index = i;
+        dmax = d;
+      }
+    }
+
+    if (dmax > tolerance) {
+      const recResults1 = simplifyPoints(points.slice(0, index + 1), tolerance);
+      const recResults2 = simplifyPoints(points.slice(index), tolerance);
+      return recResults1.slice(0, -1).concat(recResults2);
+    } else {
+      return [points[0], points[end]];
+    }
   };
 
   const finishDrawing = () => {
-    const points = drawingPointsRef.current;
+    let points = drawingPointsRef.current;
     if (points.length < 3) {
       drawingPointsRef.current = [];
       if (activeStrokeRef.current) activeStrokeRef.current.style.display = 'none';
       return;
     }
+
+    // Simplify points based on brush smoothing setting (0 to 1)
+    // 0 = no smoothing (tolerance 0.1), 1 = max smoothing (tolerance 5)
+    const tolerance = 0.1 + (brushSettings.smoothing * 4.9);
+    points = simplifyPoints(points, tolerance);
 
     // Find bounding box to normalize path coordinate centers
     const xs = points.map(p => p.x);

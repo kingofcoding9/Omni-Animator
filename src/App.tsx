@@ -42,6 +42,8 @@ import { exportProjectToJson } from './export/exportJson';
 import { exportFrameToPng } from './export/exportPng';
 import { exportAnimationToSpriteSheet } from './export/exportSpriteSheet';
 import { exportPlayableHtml } from './export/exportPlayableHtml';
+import { exportSvg } from './export/exportSvg';
+import { ChevronDown } from 'lucide-react';
 
 
 export default function App() {
@@ -60,11 +62,18 @@ export default function App() {
   } = state;
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
+  const cancelExportRef = useRef<boolean>(false);
+  const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [brushSettings, setBrushSettings] = useState<BrushSettings>({
     size: 4,
     color: '#f43f5e',
-    smoothing: true
+    opacity: 1,
+    smoothing: 0.5,
+    brushType: 'pencil',
+    cap: 'round',
+    join: 'round'
   });
   const [showRecovery, setShowRecovery] = useState<boolean>(false);
   const [savedProjectData, setSavedProjectData] = useState<Project | null>(null);
@@ -128,6 +137,12 @@ export default function App() {
 
       // Nudging
       if (activeLayerId) {
+        if (e.key === 'Backspace' || e.key === 'Delete') {
+          e.preventDefault();
+          dispatch({ type: 'DELETE_LAYER', payload: activeLayerId });
+          return;
+        }
+
         let dx = 0;
         let dy = 0;
         if (e.key === 'ArrowUp') dy = -1;
@@ -147,8 +162,8 @@ export default function App() {
           // Use dispatch directly to ensure we can capture history properly if needed
           // Or just update property without pushing history every single nudge frame,
           // but we can just let it push for simplicity or not.
-          handleUpdateLayerProperty(activeLayerId, 'x', currentProps.x + dx * step, false);
-          handleUpdateLayerProperty(activeLayerId, 'y', currentProps.y + dy * step, false);
+          handleUpdateLayerProperty(activeLayerId, 'x', currentProps.x + dx * step, true);
+          handleUpdateLayerProperty(activeLayerId, 'y', currentProps.y + dy * step, true);
         }
       }
     };
@@ -174,14 +189,18 @@ export default function App() {
 
   const handleAddFreeformLayer = (points: Point[], center: Point) => {
     dispatch({
-      type: 'ADD_FREEFORM_LAYER',
+      type: 'ADD_BRUSH_LAYER',
       payload: { 
         points, 
         center, 
         currentFrame,
         strokeColor: brushSettings.color,
         strokeWidth: brushSettings.size,
-        smoothing: brushSettings.smoothing
+        opacity: brushSettings.opacity,
+        smoothing: brushSettings.smoothing,
+        brushType: brushSettings.brushType,
+        cap: brushSettings.cap,
+        join: brushSettings.join
       }
     });
   };
@@ -306,6 +325,14 @@ export default function App() {
     reader.readAsText(file);
   };
 
+  const handleExportSvg = () => {
+    try {
+      exportSvg(project, currentFrame);
+    } catch (err) {
+      alert("Failed to render current frame as SVG.");
+    }
+  };
+
   const handleExportPNGFrame = async () => {
     try {
       setIsLoading(true);
@@ -325,15 +352,21 @@ export default function App() {
     if (!confirmSheet) return;
 
     setIsLoading(true);
+    cancelExportRef.current = false;
+    setExportProgress({ current: 0, total: totalFrames });
     dispatch({ type: 'SET_PLAYING', payload: false });
 
-    const cancelRef = { current: false };
     try {
-      await exportAnimationToSpriteSheet(project, () => {}, cancelRef);
+      await exportAnimationToSpriteSheet(project, (current) => {
+        setExportProgress({ current, total: totalFrames });
+      }, cancelExportRef);
     } catch (err: any) {
-      alert(err.message || "Failed to render sprite sheet.");
+      if (err.message !== 'Cancelled') {
+        alert(err.message || "Failed to render sprite sheet.");
+      }
     } finally {
       setIsLoading(false);
+      setExportProgress(null);
     }
   };
 
@@ -485,49 +518,56 @@ export default function App() {
               </div>
             </div>
 
-            {/* Render Static PNG */}
-            <div className="relative group">
+            {/* Export Menu Dropdown */}
+            <div className="relative">
               <button
-                id="header-png-btn"
-                onClick={handleExportPNGFrame}
-                className="px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-xl border border-slate-850 text-xs font-sans font-bold flex items-center gap-2 transition-all active:translate-y-[1px] shadow-lg shadow-black/40 cursor-pointer"
-              >
-                <ImageIcon className="w-4 h-4 text-purple-400" />
-                <span className="hidden md:inline">Export PNG</span>
-              </button>
-              <div className="absolute right-0 top-11 opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50 w-60 bg-slate-900 border border-slate-800 p-2.5 rounded-lg shadow-xl text-[10px] text-slate-400 leading-normal">
-                <strong>Export PNG:</strong> Exports an image of the current frame.
-              </div>
-            </div>
-
-            {/* Render Sprite Sheet */}
-            <div className="relative group">
-              <button
-                id="header-spritesheet-btn"
-                onClick={handleExportSpriteSheet}
-                className="px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-xl border border-slate-850 text-xs font-sans font-bold flex items-center gap-2 transition-all active:translate-y-[1px] shadow-lg shadow-black/40 cursor-pointer"
-              >
-                <Grid className="w-4 h-4 text-amber-500" />
-                <span className="hidden lg:inline">Export Sheet</span>
-              </button>
-              <div className="absolute right-0 top-11 opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50 w-60 bg-slate-900 border border-slate-800 p-2.5 rounded-lg shadow-xl text-[10px] text-slate-400 leading-normal">
-                <strong>Export Spritesheet:</strong> Exports a combined grid image of all frames.
-              </div>
-            </div>
-
-            {/* Render Standalone Playable HTML Player */}
-            <div className="relative group">
-              <button
-                id="header-html-btn"
-                onClick={handleExportPlayableHTML}
+                id="header-export-btn"
+                onClick={() => setShowExportMenu(!showExportMenu)}
                 className="px-3.5 py-2.5 bg-teal-500 hover:bg-teal-400 text-slate-950 rounded-xl text-xs font-sans font-bold flex items-center gap-2 transition-all active:translate-y-[1px] shadow-lg shadow-teal-500/20 cursor-pointer"
               >
-                <Share2 className="w-4 h-4 text-slate-950" />
-                <span>Playable HTML</span>
+                <Download className="w-4 h-4 text-slate-950" />
+                <span>Export</span>
+                <ChevronDown className="w-3 h-3 text-slate-950" />
               </button>
-              <div className="absolute right-0 top-11 opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50 w-60 bg-slate-900 border border-slate-800 p-2.5 rounded-lg shadow-xl text-[10px] text-slate-400 leading-normal">
-                <strong>Playable HTML:</strong> Packs all vector elements and interpolation players into a single self-contained document you can load anywhere.
-              </div>
+              
+              {showExportMenu && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setShowExportMenu(false)}
+                  />
+                  <div className="absolute right-0 mt-2 w-48 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col py-1">
+                    <button
+                      onClick={() => { setShowExportMenu(false); handleExportPNGFrame(); }}
+                      className="px-4 py-2.5 text-left text-xs font-sans text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-3"
+                    >
+                      <ImageIcon className="w-4 h-4 text-purple-400" />
+                      PNG
+                    </button>
+                    <button
+                      onClick={() => { setShowExportMenu(false); handleExportSvg(); }}
+                      className="px-4 py-2.5 text-left text-xs font-sans text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-3"
+                    >
+                      <Share2 className="w-4 h-4 text-pink-400" />
+                      SVG
+                    </button>
+                    <button
+                      onClick={() => { setShowExportMenu(false); handleExportSpriteSheet(); }}
+                      className="px-4 py-2.5 text-left text-xs font-sans text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-3"
+                    >
+                      <Grid className="w-4 h-4 text-amber-500" />
+                      Sprite Sheet
+                    </button>
+                    <button
+                      onClick={() => { setShowExportMenu(false); handleExportPlayableHTML(); }}
+                      className="px-4 py-2.5 text-left text-xs font-sans text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-3 border-t border-slate-800/50 mt-1 pt-2"
+                    >
+                      <Sparkles className="w-4 h-4 text-teal-400" />
+                      Playable Animation
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
 
           </div>
@@ -537,9 +577,26 @@ export default function App() {
 
       {/* Loading overlay indicator */}
       {isLoading && (
-        <div id="global-loading-indicator" className="fixed bottom-6 right-6 z-50 bg-slate-900 border border-teal-500/40 px-4 py-2.5 rounded-xl flex items-center gap-3 shadow-2xl backdrop-blur-md">
-          <RefreshCw className="w-4 h-4 text-teal-400 animate-spin" />
-          <span className="text-xs font-sans text-slate-200">Loading...</span>
+        <div id="global-loading-indicator" className="fixed bottom-6 right-6 z-50 bg-slate-900 border border-teal-500/40 px-4 py-3 rounded-xl flex items-center gap-4 shadow-2xl backdrop-blur-md">
+          <RefreshCw className="w-5 h-5 text-teal-400 animate-spin shrink-0" />
+          <div className="flex flex-col min-w-[120px]">
+            <span className="text-sm font-sans font-medium text-slate-200">
+              {exportProgress ? 'Exporting...' : 'Loading...'}
+            </span>
+            {exportProgress && (
+              <span className="text-xs font-mono text-slate-400">
+                Frame {exportProgress.current} of {exportProgress.total}
+              </span>
+            )}
+          </div>
+          {exportProgress && (
+            <button
+              onClick={() => { cancelExportRef.current = true; }}
+              className="ml-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-sans rounded-lg transition-colors border border-slate-700"
+            >
+              Cancel
+            </button>
+          )}
         </div>
       )}
 
@@ -573,7 +630,9 @@ export default function App() {
             onionSkinEnabled={onionSkinEnabled}
             gridSnap={gridSnap}
             onUpdateLayerProperty={handleUpdateLayerProperty}
-            onStartTransaction={() => dispatch({ type: 'START_TRANSACTION' })}
+            onStartTransaction={() => dispatch({ type: 'BEGIN_TRANSACTION' })}
+            onCommitTransaction={() => dispatch({ type: 'COMMIT_TRANSACTION' })}
+            onCancelTransaction={() => dispatch({ type: 'CANCEL_TRANSACTION' })}
             onSelectLayer={(id) => {
               dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'select' });
               dispatch({ type: 'SET_ACTIVE_LAYER', payload: id });

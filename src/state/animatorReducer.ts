@@ -7,6 +7,7 @@ export interface AnimatorState {
   project: Project;
   past: Project[];
   future: Project[];
+  transactionSnapshot: Project | null;
   activeLayerId: string | null;
   currentFrame: number;
   onionSkinEnabled: boolean;
@@ -21,6 +22,7 @@ export const initialAnimatorState = (defaultProject: Project): AnimatorState => 
   project: defaultProject,
   past: [],
   future: [],
+  transactionSnapshot: null,
   activeLayerId: defaultProject.layers[1]?.id || defaultProject.layers[0]?.id || null,
   currentFrame: 0,
   onionSkinEnabled: true,
@@ -66,8 +68,32 @@ export function animatorReducer(state: AnimatorState, action: AnimatorAction): A
       };
     }
 
-    case 'START_TRANSACTION': {
-      return pushHistory(state, state);
+    case 'BEGIN_TRANSACTION': {
+      if (state.transactionSnapshot) return state; // Already in transaction
+      return {
+        ...state,
+        transactionSnapshot: JSON.parse(JSON.stringify(state.project)),
+      };
+    }
+
+    case 'COMMIT_TRANSACTION': {
+      if (!state.transactionSnapshot) return state; // Not in transaction
+      const past = pushHistoryState(state.past, state.transactionSnapshot);
+      return {
+        ...state,
+        past,
+        future: [],
+        transactionSnapshot: null,
+      };
+    }
+
+    case 'CANCEL_TRANSACTION': {
+      if (!state.transactionSnapshot) return state; // Not in transaction
+      return {
+        ...state,
+        project: state.transactionSnapshot,
+        transactionSnapshot: null,
+      };
     }
 
     case 'SET_ACTIVE_LAYER': {
@@ -210,6 +236,63 @@ export function animatorReducer(state: AnimatorState, action: AnimatorAction): A
         locked: false,
         freeformPoints: points,
         freeformSmoothing: smoothing !== undefined ? smoothing : true,
+        keyframes: [defaultKf],
+      };
+
+      return {
+        ...state,
+        isPlaying: false,
+        past,
+        future: [],
+        project: {
+          ...state.project,
+          layers: [...state.project.layers, newLayer],
+          updatedAt: new Date().toISOString(),
+        },
+        activeLayerId: layerId,
+        activeTool: 'select',
+      };
+    }
+
+    case 'ADD_BRUSH_LAYER': {
+      const { points, center, currentFrame, strokeColor, strokeWidth, opacity, smoothing, brushType, cap, join } = action.payload;
+      const past = pushHistoryState(state.past, state.project);
+
+      const count = state.project.layers.filter(l => l.type === 'brush').length + 1;
+      const layerId = `layer-brush-${Date.now()}`;
+      const layerName = `Stroke ${count}`;
+
+      const width = Math.max(10, Math.max(...points.map(p => p.x)) - Math.min(...points.map(p => p.x)));
+      const height = Math.max(10, Math.max(...points.map(p => p.y)) - Math.min(...points.map(p => p.y)));
+
+      const defaultKf: Keyframe = {
+        frame: currentFrame,
+        x: center.x,
+        y: center.y,
+        scaleX: 1,
+        scaleY: 1,
+        rotation: 0,
+        opacity: opacity,
+        color: 'transparent', 
+        strokeColor: strokeColor,
+        strokeWidth: strokeWidth,
+        width,
+        height,
+        fontSize: 24,
+        easing: 'linear',
+      };
+
+      const newLayer: Layer = {
+        id: layerId,
+        name: layerName,
+        type: 'brush',
+        visible: true,
+        locked: false,
+        brushPoints: points,
+        brushSmoothing: smoothing,
+        brushType: brushType,
+        strokeLinecap: cap,
+        strokeLinejoin: join,
         keyframes: [defaultKf],
       };
 

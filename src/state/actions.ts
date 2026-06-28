@@ -4,8 +4,9 @@ export type AnimatorAction =
   | { type: 'SET_PROJECT'; payload: Project }
   | { type: 'UNDO' }
   | { type: 'REDO' }
-  | { type: 'START_TRANSACTION' }
-  | { type: 'COMMIT_HISTORY' }
+  | { type: 'BEGIN_TRANSACTION' }
+  | { type: 'COMMIT_TRANSACTION' }
+  | { type: 'CANCEL_TRANSACTION' }
   | { type: 'SET_ACTIVE_LAYER'; payload: string | null }
   | { type: 'SET_CURRENT_FRAME'; payload: number }
   | { type: 'SET_ONION_SKIN'; payload: boolean }
@@ -15,6 +16,7 @@ export type AnimatorAction =
   | { type: 'SET_PLAYING'; payload: boolean }
   | { type: 'ADD_LAYER'; payload: { type: ShapeType; defaultProperties: Partial<Keyframe>; currentFrame: number; text?: string; imageUrl?: string } }
   | { type: 'ADD_FREEFORM_LAYER'; payload: { points: Point[]; center: Point; currentFrame: number; strokeColor?: string; strokeWidth?: number; smoothing?: boolean } }
+  | { type: 'ADD_BRUSH_LAYER'; payload: { points: Point[]; center: Point; currentFrame: number; strokeColor: string; strokeWidth: number; opacity: number; smoothing: number; brushType: 'pencil' | 'smooth' | 'marker'; cap: 'round' | 'square' | 'butt'; join: 'round' | 'bevel' | 'miter' } }
   | { type: 'UPDATE_LAYER_PROPERTY'; payload: { layerId: string; property: keyof Keyframe | 'text' | 'imageUrl'; value: any; currentFrame: number; pushToHistory?: boolean } }
   | { type: 'MOVE_KEYFRAME'; payload: { layerId: string; fromFrame: number; toFrame: number } }
   | { type: 'ADD_KEYFRAME_AT_FRAME'; payload: { layerId: string; frame: number } }

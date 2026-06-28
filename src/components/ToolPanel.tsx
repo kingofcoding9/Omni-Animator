@@ -23,7 +23,11 @@ import { ShapeType } from '../types';
 export interface BrushSettings {
   size: number;
   color: string;
-  smoothing: boolean;
+  opacity: number;
+  smoothing: number;
+  brushType: 'pencil' | 'smooth' | 'marker' | 'eraser';
+  cap: 'round' | 'square' | 'butt';
+  join: 'round' | 'bevel' | 'miter';
 }
 
 interface ToolPanelProps {
@@ -220,15 +224,47 @@ export default function ToolPanel({
               </div>
             </div>
 
-            <label className="flex items-center gap-2 cursor-pointer">
+            <div className="space-y-1">
+              <label className="text-[10px] text-slate-400">Smoothing: {Math.round(brushSettings.smoothing * 100)}%</label>
               <input 
-                type="checkbox" 
-                checked={brushSettings.smoothing}
-                onChange={(e) => setBrushSettings({ ...brushSettings, smoothing: e.target.checked })}
-                className="rounded border-slate-700 text-teal-500 bg-slate-900 focus:ring-teal-500"
+                type="range" 
+                min="0" max="1" step="0.05"
+                value={brushSettings.smoothing}
+                onChange={(e) => setBrushSettings({ ...brushSettings, smoothing: parseFloat(e.target.value) })}
+                className="w-full accent-teal-500"
               />
-              <span className="text-xs text-slate-300">Smooth Stroke</span>
-            </label>
+            </div>
+            
+            <div className="space-y-1">
+              <label className="text-[10px] text-slate-400">Preset Style</label>
+              <select
+                value={brushSettings.brushType}
+                onChange={(e) => {
+                  const type = e.target.value as 'pencil' | 'smooth' | 'marker' | 'eraser';
+                  let updates: Partial<BrushSettings> = { brushType: type };
+                  if (type === 'pencil') {
+                    updates.smoothing = 0;
+                    updates.cap = 'square';
+                    updates.join = 'miter';
+                  } else if (type === 'smooth') {
+                    updates.smoothing = 0.8;
+                    updates.cap = 'round';
+                    updates.join = 'round';
+                  } else if (type === 'marker') {
+                    updates.smoothing = 0.3;
+                    updates.cap = 'butt';
+                    updates.join = 'bevel';
+                    updates.opacity = 0.7;
+                  }
+                  setBrushSettings({ ...brushSettings, ...updates });
+                }}
+                className="w-full bg-slate-900 text-xs text-slate-300 rounded border border-slate-700 px-2 py-1.5 focus:border-teal-500 outline-none"
+              >
+                <option value="pencil">Pencil (Hard, No Smooth)</option>
+                <option value="smooth">Smooth Pen (Round)</option>
+                <option value="marker">Marker (Flat, Bevel)</option>
+              </select>
+            </div>
           </div>
         )}
       </div>

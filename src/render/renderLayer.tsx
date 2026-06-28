@@ -153,13 +153,17 @@ export function RenderLayer({
         </g>
       );
     }
-    case 'freeform': {
-      if (!layer.freeformPoints || layer.freeformPoints.length === 0) return null;
+    case 'freeform':
+    case 'brush': {
+      const isBrush = layer.type === 'brush';
+      const points = isBrush ? layer.brushPoints : layer.freeformPoints;
+      if (!points || points.length === 0) return null;
 
       let pathData = '';
-      const points = layer.freeformPoints;
       
-      if (!layer.freeformSmoothing || points.length < 3) {
+      const smoothingAmount = isBrush ? (layer.brushSmoothing ?? 0.5) : (layer.freeformSmoothing ? 1 : 0);
+      
+      if (smoothingAmount === 0 || points.length < 3) {
         pathData = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
       } else {
         pathData = `M ${points[0].x} ${points[0].y}`;
@@ -182,8 +186,8 @@ export function RenderLayer({
           fill={fillColor === 'transparent' ? 'none' : fillColor}
           stroke={activeStroke}
           strokeWidth={strokeWidth || 4}
-          strokeLinecap="round"
-          strokeLinejoin="round"
+          strokeLinecap={layer.strokeLinecap || 'round'}
+          strokeLinejoin={layer.strokeLinejoin || 'round'}
           transform={`translate(${props.x}, ${props.y}) rotate(${props.rotation}) scale(${props.scaleX}, ${props.scaleY})`}
           {...sharedProps}
         />

@@ -55,8 +55,14 @@ export default function Timeline({
   setIsPlaying,
 }: TimelineProps) {
   const [isLooping, setIsLooping] = useState<boolean>(true);
-  const [draggingKeyframe, setDraggingKeyframe] = useState<{ layerId: string; fromFrame: number } | null>(null);
+  const [draggingKeyframe, setDraggingKeyframe] = useState<{ layerId: string; fromFrame: number; targetFrame: number } | null>(null);
+  const draggingKeyframeRef = useRef<{ layerId: string; fromFrame: number; targetFrame: number } | null>(null);
   const [isScrubbingRuler, setIsScrubbingRuler] = useState<boolean>(false);
+
+  const updateDraggingKeyframe = (state: { layerId: string; fromFrame: number; targetFrame: number } | null) => {
+    setDraggingKeyframe(state);
+    draggingKeyframeRef.current = state;
+  };
 
   const totalFrames = Math.max(12, fps * duration);
   const playTimerRef = useRef<number | null>(null);
@@ -117,12 +123,31 @@ export default function Timeline({
   // Handle global mouse release for keyframe dragging and ruler scrubbing
   useEffect(() => {
     const handleMouseUp = () => {
-      setDraggingKeyframe(null);
+      const dragState = draggingKeyframeRef.current;
+      if (dragState && dragState.fromFrame !== dragState.targetFrame) {
+        onMoveKeyframe(dragState.layerId, dragState.fromFrame, dragState.targetFrame);
+      }
+      updateDraggingKeyframe(null);
       setIsScrubbingRuler(false);
     };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        const dragState = draggingKeyframeRef.current;
+        if (dragState) {
+          updateDraggingKeyframe(null);
+        }
+        setIsScrubbingRuler(false);
+      }
+    };
+
     window.addEventListener('mouseup', handleMouseUp);
-    return () => window.removeEventListener('mouseup', handleMouseUp);
-  }, []);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onMoveKeyframe]);
 
   const handlePlayToggle = () => setIsPlaying(!isPlaying);
   
@@ -165,9 +190,8 @@ export default function Timeline({
       const percentage = Math.max(0, Math.min(1, relativeX / rect.width));
       const targetFrame = Math.round(percentage * (totalFrames - 1));
       
-      if (targetFrame !== draggingKeyframe.fromFrame) {
-         onMoveKeyframe(draggingKeyframe.layerId, draggingKeyframe.fromFrame, targetFrame);
-         setDraggingKeyframe({ layerId: draggingKeyframe.layerId, fromFrame: targetFrame });
+      if (targetFrame !== draggingKeyframe.targetFrame) {
+         updateDraggingKeyframe({ ...draggingKeyframe, targetFrame });
       }
     }
   };
@@ -176,7 +200,7 @@ export default function Timeline({
   const handleKeyframeMouseDown = (e: React.MouseEvent, layerId: string, frame: number) => {
     e.stopPropagation();
     if (e.button === 0) { // left click
-      setDraggingKeyframe({ layerId, fromFrame: frame });
+      updateDraggingKeyframe({ layerId, fromFrame: frame, targetFrame: frame });
     }
   };
 
@@ -451,11 +475,14 @@ export default function Timeline({
 
                   {layer.keyframes.map((kf) => {
                      const isCurrent = kf.frame === currentFrame;
+                     const isDragging = draggingKeyframe && draggingKeyframe.layerId === layer.id && draggingKeyframe.fromFrame === kf.frame;
+                     const displayFrame = isDragging ? draggingKeyframe.targetFrame : kf.frame;
+                     
                      return (
                         <div
                            key={`kf-${layer.id}-${kf.frame}`}
                            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10"
-                           style={{ left: `${(kf.frame / (totalFrames - 1)) * 100}%` }}
+                           style={{ left: `${(displayFrame / (totalFrames - 1)) * 100}%` }}
                            onMouseDown={(e) => handleKeyframeMouseDown(e, layer.id, kf.frame)}
                            onDoubleClick={(e) => {
                               e.stopPropagation();
@@ -467,7 +494,7 @@ export default function Timeline({
                                 isCurrent 
                                   ? 'bg-amber-400 border-white scale-110 shadow-amber-500/30' 
                                   : 'bg-amber-600 border-amber-950 hover:bg-amber-500'
-                              }`}
+                              } ${isDragging ? 'opacity-50' : 'opacity-100'}`}
                               title={`Keyframe at frame ${kf.frame} (Hold & Drag to shift)`}
                            />
                         </div>
