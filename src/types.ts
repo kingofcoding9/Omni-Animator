@@ -24,6 +24,9 @@ export interface Keyframe {
   width: number;
   height: number;
   fontSize: number; // for text
+  fontWeight?: string; // 'normal' | 'bold' | '300' | '500' | '700' etc
+  textAlign?: 'left' | 'center' | 'right';
+  borderRadius?: number; // for rectangle corner rounding
   easing: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
 }
 
@@ -34,18 +37,32 @@ export interface Layer {
   visible: boolean;
   locked: boolean;
   text?: string;        // for text shapes
-  imageUrl?: string;    // for image shapes
+  imageUrl?: string;    // for image shapes (URL or asset ID reference or data URL)
   freeformPoints?: Point[]; // for freeform drawing
+  freeformSmoothing?: boolean; // smoothing enabled
   keyframes: Keyframe[]; // sorted by frame ascending
 }
 
+export interface ProjectAsset {
+  id: string;
+  name: string;
+  dataUrl: string; // Base64 data URI or Object URL
+  type: string;
+}
+
 export interface Project {
+  id: string;
+  schemaVersion: number;
   name: string;
   fps: number;
   duration: number; // in seconds
   width: number;    // stage width in px
   height: number;   // stage height in px
+  backgroundColor: string; // CSS background color (e.g. #020617)
   layers: Layer[];
+  assets: ProjectAsset[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface HistoryState {
@@ -53,3 +70,4 @@ export interface HistoryState {
   present: Project;
   future: Project[];
 }
+

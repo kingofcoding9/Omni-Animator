@@ -143,7 +143,7 @@ export default function UserGuide({ isOpen, onClose }: UserGuideProps) {
                 {/* 8. Save and open projects */}
                 <div id="guide-sec-8" className="p-4 bg-slate-950/50 rounded-xl border border-slate-800 space-y-2">
                   <h3 className="text-sm font-sans font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-2">
-                    <FileText className="w-4 h-4" /> 8. Projects &amp; Persistence
+                    <FileText className="w-4 h-4" /> 8. Saving and Opening
                   </h3>
                   <p className="text-xs text-slate-300 leading-relaxed">
                     Save your project safely to a JSON file on your machine using the <strong>Save Project</strong> button. When you return later, drag or upload the JSON project file to instantly recreate your work, preserving all elements, layers, coordinates, and keyframes.
@@ -156,7 +156,7 @@ export default function UserGuide({ isOpen, onClose }: UserGuideProps) {
                     <Layers className="w-4 h-4" /> 9. Export Options
                   </h3>
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    You can export in multiple ways: download the current static frame as a <strong>PNG Image</strong>, build a full <strong>Sprite Sheet</strong> containing all frame states as a single sheet, or export <strong>Browser Playable Data</strong> that packages your vector animation cleanly.
+                    You can export in multiple ways: download the current static frame as a <strong>PNG Image</strong>, build a full <strong>Sprite Sheet</strong> containing all frame states as a single sheet, or export a <strong>Playable Animation</strong> that packages your vector animation cleanly.
                   </p>
                 </div>
 
@@ -225,7 +225,7 @@ export default function UserGuide({ isOpen, onClose }: UserGuideProps) {
             {/* Footer */}
             <div id="guide-footer" className="px-6 py-4 bg-slate-950/80 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="text-xs text-slate-500 font-mono">
-                System: Stable Engine • Owned by Omni-Science
+                Owned by Omni-Science
               </div>
               <button
                 id="guide-got-it-btn"

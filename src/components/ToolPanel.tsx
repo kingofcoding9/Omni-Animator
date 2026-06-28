@@ -127,7 +127,7 @@ export default function ToolPanel({
 
         {/* Shape / Sprites Palette */}
         <div className="space-y-2">
-          <div className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Vector Toolkit</div>
+          <div className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Tools</div>
           <div className="space-y-1.5">
             {/* Standard Selection Tool */}
             <button

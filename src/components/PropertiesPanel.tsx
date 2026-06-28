@@ -125,7 +125,7 @@ export default function PropertiesPanel({
         <div className="space-y-2">
           <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-500 uppercase tracking-wider">
             <Compass className="w-3.5 h-3.5 text-sky-400" />
-            <span>Transform Coordinates</span>
+            <span>Position</span>
           </div>
           
           <div className="grid grid-cols-2 gap-2">
@@ -272,7 +272,7 @@ export default function PropertiesPanel({
 
         {/* 5. Custom shape specific settings */}
         {activeLayer.type === 'text' && (
-          <div className="space-y-2 p-3 rounded-xl bg-slate-950/50 border border-slate-850">
+          <div className="space-y-3 p-3 rounded-xl bg-slate-950/50 border border-slate-850">
             <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400 uppercase">
               <Type className="w-3.5 h-3.5 text-amber-400" />
               <span>Text Settings</span>
@@ -305,6 +305,65 @@ export default function PropertiesPanel({
                 className="w-full accent-amber-400 h-1 bg-slate-950 rounded-lg cursor-pointer"
               />
             </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-sans font-medium text-slate-400">Font Weight</label>
+                <select
+                  id="prop-fontWeight-select"
+                  value={interpolatedProperties.fontWeight || 'bold'}
+                  onChange={(e) => handlePropertyChange('fontWeight', e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-850 text-xs text-white rounded px-2 py-1.5 focus:outline-none font-sans"
+                >
+                  <option value="normal">Normal</option>
+                  <option value="medium">Medium</option>
+                  <option value="bold">Bold</option>
+                  <option value="black">Black</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-sans font-medium text-slate-400">Alignment</label>
+                <select
+                  id="prop-textAlign-select"
+                  value={interpolatedProperties.textAlign || 'center'}
+                  onChange={(e) => handlePropertyChange('textAlign', e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-850 text-xs text-white rounded px-2 py-1.5 focus:outline-none font-sans"
+                >
+                  <option value="left">Left</option>
+                  <option value="center">Center</option>
+                  <option value="right">Right</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {(activeLayer.type === 'square' || activeLayer.type === 'rectangle') && (
+          <div className="space-y-1 p-3 rounded-xl bg-slate-950/50 border border-slate-850">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-sans font-medium text-slate-400">Corner Rounding (px)</label>
+              <span className="text-xs text-white font-mono">{Math.round(interpolatedProperties.borderRadius || 0)}px</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                id="prop-borderRadius-slider"
+                type="range"
+                min="0"
+                max="100"
+                value={interpolatedProperties.borderRadius || 0}
+                onChange={(e) => handlePropertyChange('borderRadius', parseInt(e.target.value))}
+                className="flex-1 accent-teal-400 h-1 bg-slate-950 rounded-lg cursor-pointer"
+              />
+              <input
+                id="prop-borderRadius-input"
+                type="number"
+                min="0"
+                max="100"
+                value={Math.round(interpolatedProperties.borderRadius || 0)}
+                onChange={(e) => handlePropertyChange('borderRadius', Math.max(0, parseInt(e.target.value) || 0))}
+                className="w-16 bg-slate-950 border border-slate-850 text-xs text-white rounded px-1.5 py-1 text-center focus:outline-none"
+              />
+            </div>
           </div>
         )}
 
@@ -312,9 +371,9 @@ export default function PropertiesPanel({
           <div className="space-y-2 p-3 rounded-xl bg-slate-950/50 border border-slate-850">
             <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400 uppercase">
               <ImageIcon className="w-3.5 h-3.5 text-rose-400" />
-              <span>Sprite URL Source</span>
+              <span>Image</span>
             </div>
-            <p className="text-[10px] text-slate-500">Provide an image address starting with https or data URL:</p>
+            <p className="text-[10px] text-slate-500 font-sans">Provide an image address starting with https or select an uploaded asset ID:</p>
             <input
               id="prop-imageUrl-input"
               type="text"

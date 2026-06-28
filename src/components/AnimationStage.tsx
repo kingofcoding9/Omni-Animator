@@ -14,8 +14,9 @@ import {
   Sparkles,
   RefreshCw
 } from 'lucide-react';
-import { Layer, Keyframe, Point } from '../types';
+import { Layer, Keyframe, Point, ProjectAsset } from '../types';
 import { getInterpolatedProperties } from '../utils/animation';
+import { RenderLayer } from '../render/renderLayer';
 
 interface AnimationStageProps {
   layers: Layer[];
@@ -30,6 +31,7 @@ interface AnimationStageProps {
   setActiveTool: (tool: any) => void;
   projectWidth: number;
   projectHeight: number;
+  assets?: ProjectAsset[];
 }
 
 export default function AnimationStage({
@@ -45,6 +47,7 @@ export default function AnimationStage({
   setActiveTool,
   projectWidth,
   projectHeight,
+  assets = [],
 }: AnimationStageProps) {
   const [zoom, setZoom] = useState<number>(1);
   const [panX, setPanX] = useState<number>(0);
@@ -326,164 +329,35 @@ export default function AnimationStage({
   const renderLayerShape = (layer: Layer, props: Omit<Keyframe, 'frame'>, index: number, isGhost: boolean = false, ghostTint: string | null = null) => {
     if (!layer.visible && !isGhost) return null;
 
-    const baseOpacity = props.opacity ?? 1;
-    const finalOpacity = isGhost ? 0.25 : baseOpacity;
-    const fillColor = ghostTint ? ghostTint : props.color;
-    const strokeColor = ghostTint ? ghostTint : props.strokeColor;
-    const strokeWidth = props.strokeWidth ?? 2;
-
-    const sharedProps = {
-      opacity: finalOpacity,
-      onClick: (e: React.MouseEvent) => {
-        if (isGhost || layer.locked) return;
-        e.stopPropagation();
-        onSelectLayer(layer.id);
-      },
-      className: `transition-all duration-75 ${isGhost ? '' : 'cursor-pointer hover:stroke-teal-400/40'}`,
-      style: { pointerEvents: isGhost || isPanningMode || activeTool === 'drawing' ? 'none' : 'auto' } as React.CSSProperties
+    const finalProps = {
+      ...props,
+      color: ghostTint ? ghostTint : props.color,
+      strokeColor: ghostTint ? ghostTint : props.strokeColor,
+      opacity: isGhost ? 0.25 : (props.opacity ?? 1),
     };
 
-    switch (layer.type) {
-      case 'circle': {
-        const radius = props.width / 2;
-        return (
-          <circle
-            key={`${layer.id}-${index}-${isGhost ? 'ghost' : 'real'}`}
-            id={`shape-circle-${layer.id}`}
-            cx={props.x}
-            cy={props.y}
-            r={radius}
-            fill={fillColor}
-            stroke={strokeColor}
-            strokeWidth={strokeWidth}
-            transform={`rotate(${props.rotation}, ${props.x}, ${props.y})`}
-            {...sharedProps}
-          />
-        );
-      }
-      case 'square':
-      case 'rectangle': {
-        const xOffset = props.x - props.width / 2;
-        const yOffset = props.y - props.height / 2;
-        return (
-          <rect
-            key={`${layer.id}-${index}-${isGhost ? 'ghost' : 'real'}`}
-            id={`shape-rect-${layer.id}`}
-            x={xOffset}
-            y={yOffset}
-            width={props.width}
-            height={props.height}
-            rx={layer.type === 'square' ? props.width * 0.05 : 0} // visual roundness for square
-            fill={fillColor}
-            stroke={strokeColor}
-            strokeWidth={strokeWidth}
-            transform={`rotate(${props.rotation}, ${props.x}, ${props.y})`}
-            {...sharedProps}
-          />
-        );
-      }
-      case 'line': {
-        const x1 = props.x - props.width / 2;
-        const x2 = props.x + props.width / 2;
-        const y = props.y;
-        return (
-          <line
-            key={`${layer.id}-${index}-${isGhost ? 'ghost' : 'real'}`}
-            id={`shape-line-${layer.id}`}
-            x1={x1}
-            y1={y}
-            x2={x2}
-            y2={y}
-            stroke={fillColor} // line uses main color as stroke
-            strokeWidth={strokeWidth || 4}
-            strokeLinecap="round"
-            transform={`rotate(${props.rotation}, ${props.x}, ${props.y})`}
-            {...sharedProps}
-          />
-        );
-      }
-      case 'text': {
-        return (
-          <text
-            key={`${layer.id}-${index}-${isGhost ? 'ghost' : 'real'}`}
-            id={`shape-text-${layer.id}`}
-            x={props.x}
-            y={props.y}
-            fill={fillColor}
-            stroke={strokeWidth > 0 ? strokeColor : 'none'}
-            strokeWidth={strokeWidth}
-            fontSize={props.fontSize}
-            fontFamily="Inter, system-ui, sans-serif"
-            fontWeight="bold"
-            textAnchor="middle"
-            dominantBaseline="central"
-            transform={`rotate(${props.rotation}, ${props.x}, ${props.y})`}
-            {...sharedProps}
-          >
-            {layer.text || 'TEXT'}
-          </text>
-        );
-      }
-      case 'image': {
-        const xOffset = props.x - props.width / 2;
-        const yOffset = props.y - props.height / 2;
-        const defaultImg = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200';
-        return (
-          <g key={`${layer.id}-${index}-${isGhost ? 'ghost' : 'real'}`}>
-            <image
-              id={`shape-image-${layer.id}`}
-              href={layer.imageUrl || defaultImg}
-              x={xOffset}
-              y={yOffset}
-              width={props.width}
-              height={props.height}
-              transform={`rotate(${props.rotation}, ${props.x}, ${props.y})`}
-              preserveAspectRatio="xMidYMid slice"
-              {...sharedProps}
-            />
-            {/* Draw a subtle boundary border for sprite positioning helper */}
-            {!isGhost && activeLayerId === layer.id && (
-              <rect
-                x={xOffset}
-                y={yOffset}
-                width={props.width}
-                height={props.height}
-                fill="none"
-                stroke="#fda4af"
-                strokeWidth="1"
-                transform={`rotate(${props.rotation}, ${props.x}, ${props.y})`}
-                style={{ pointerEvents: 'none' }}
-              />
-            )}
-          </g>
-        );
-      }
-      case 'freeform': {
-        if (!layer.freeformPoints || layer.freeformPoints.length === 0) return null;
-        
-        // Construct standard SVG path data relative to center
-        const pathData = layer.freeformPoints.map((p, i) => 
-          `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`
-        ).join(' ');
-
-        return (
-          <path
-            key={`${layer.id}-${index}-${isGhost ? 'ghost' : 'real'}`}
-            id={`shape-path-${layer.id}`}
-            d={pathData}
-            fill="none"
-            stroke={fillColor}
-            strokeWidth={strokeWidth || 4}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            transform={`translate(${props.x}, ${props.y}) rotate(${props.rotation}) scale(${props.scaleX}, ${props.scaleY})`}
-            {...sharedProps}
-          />
-        );
-      }
-      default:
-        return null;
-    }
+    return (
+      <g
+        key={`${layer.id}-${index}-${isGhost ? 'ghost' : 'real'}`}
+        onClick={(e) => {
+          if (isGhost || layer.locked) return;
+          e.stopPropagation();
+          onSelectLayer(layer.id);
+        }}
+        style={{
+          pointerEvents: isGhost || isPanningMode || activeTool === 'drawing' ? 'none' : 'auto'
+        }}
+      >
+        <RenderLayer
+          layer={layer}
+          props={finalProps}
+          index={index}
+          isGhost={isGhost}
+          activeLayerId={activeLayerId}
+          assets={assets}
+        />
+      </g>
+    );
   };
 
   // Render active selection outlines and edit handlers

@@ -119,6 +119,11 @@ export function getInterpolatedProperties(layer: Layer, frame: number): Omit<Key
     height: prev.height + (next.height - prev.height) * tEased,
     fontSize: prev.fontSize + (next.fontSize - prev.fontSize) * tEased,
     strokeWidth: prev.strokeWidth + (next.strokeWidth - prev.strokeWidth) * tEased,
+    borderRadius: (prev.borderRadius !== undefined && next.borderRadius !== undefined)
+      ? prev.borderRadius + (next.borderRadius - prev.borderRadius) * tEased
+      : prev.borderRadius ?? next.borderRadius ?? 0,
+    fontWeight: tEased < 0.5 ? prev.fontWeight : next.fontWeight,
+    textAlign: tEased < 0.5 ? prev.textAlign : next.textAlign,
     color: interpolateColor(prev.color, next.color, tEased),
     strokeColor: interpolateColor(prev.strokeColor, next.strokeColor, tEased),
     easing: prev.easing,
