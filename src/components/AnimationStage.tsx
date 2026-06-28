@@ -17,6 +17,7 @@ import {
 import { Layer, Keyframe, Point, ProjectAsset } from '../types';
 import { getInterpolatedProperties } from '../utils/animation';
 import { RenderLayer } from '../render/renderLayer';
+import { BrushSettings } from './ToolPanel';
 
 interface AnimationStageProps {
   layers: Layer[];
@@ -25,6 +26,7 @@ interface AnimationStageProps {
   onionSkinEnabled: boolean;
   gridSnap: boolean;
   onUpdateLayerProperty: (layerId: string, property: keyof Keyframe, value: any) => void;
+  onStartTransaction?: () => void;
   onSelectLayer: (id: string | null) => void;
   onAddFreeformLayer: (points: Point[], center: Point) => void;
   activeTool: 'circle' | 'square' | 'rectangle' | 'line' | 'text' | 'image' | 'freeform' | 'select' | 'drawing';
@@ -32,6 +34,7 @@ interface AnimationStageProps {
   projectWidth: number;
   projectHeight: number;
   assets?: ProjectAsset[];
+  brushSettings: BrushSettings;
 }
 
 export default function AnimationStage({
@@ -41,6 +44,7 @@ export default function AnimationStage({
   onionSkinEnabled,
   gridSnap,
   onUpdateLayerProperty,
+  onStartTransaction,
   onSelectLayer,
   onAddFreeformLayer,
   activeTool,
@@ -48,12 +52,14 @@ export default function AnimationStage({
   projectWidth,
   projectHeight,
   assets = [],
+  brushSettings,
 }: AnimationStageProps) {
   const [zoom, setZoom] = useState<number>(1);
   const [panX, setPanX] = useState<number>(0);
   const [panY, setPanY] = useState<number>(0);
   const [isPanningMode, setIsPanningMode] = useState<boolean>(false);
-  const [drawingPoints, setDrawingPoints] = useState<Point[]>([]);
+  const drawingPointsRef = useRef<Point[]>([]);
+  const activeStrokeRef = useRef<SVGPathElement>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -140,13 +146,26 @@ export default function AnimationStage({
   };
 
   // Interaction handlers
-  const handleMouseDown = (e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>, dragType: 'move' | 'resize' | 'rotate' | 'pan' | null) => {
+  const handleMouseDown = (
+    e: React.MouseEvent<SVGSVGElement | SVGCircleElement | SVGGElement> | React.TouchEvent<SVGSVGElement | SVGCircleElement | SVGGElement>, 
+    dragType: 'move' | 'resize' | 'rotate' | 'pan' | null,
+    targetLayerId?: string
+  ) => {
     e.preventDefault();
     const isTouch = 'touches' in e;
-    const clientX = isTouch ? e.touches[0].clientX : e.clientX;
-    const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+    const clientX = isTouch ? (e as React.TouchEvent).touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = isTouch ? (e as React.TouchEvent).touches[0].clientY : (e as React.MouseEvent).clientY;
 
     const actualDragType = isPanningMode || activeTool === 'drawing' ? (activeTool === 'drawing' ? 'draw' : 'pan') : dragType;
+    
+    let dragLayer = activeLayer;
+    let dragProps = activeProps;
+    if (targetLayerId && targetLayerId !== activeLayerId) {
+      dragLayer = layers.find(l => l.id === targetLayerId);
+      if (dragLayer) {
+        dragProps = getInterpolatedProperties(dragLayer, currentFrame);
+      }
+    }
 
     if (!actualDragType) {
       // Clicked on empty area, deselect or pan
@@ -175,24 +194,30 @@ export default function AnimationStage({
       };
     } else if (actualDragType === 'draw') {
       const coords = getStageCoords(clientX, clientY);
-      setDrawingPoints([coords]);
+      drawingPointsRef.current = [coords];
+      if (activeStrokeRef.current) {
+        activeStrokeRef.current.setAttribute('d', `M ${coords.x} ${coords.y}`);
+        activeStrokeRef.current.style.display = 'block';
+      }
       dragInfo.current = {
         ...dragInfo.current,
         type: 'draw',
         startX: clientX,
         startY: clientY,
       };
-    } else if (activeLayer && activeProps && !activeLayer.locked) {
+    } else if (dragLayer && dragProps && !dragLayer.locked) {
+      if (onStartTransaction) onStartTransaction();
       dragInfo.current = {
         ...dragInfo.current,
         type: actualDragType,
         startX: clientX,
         startY: clientY,
-        startLayerX: activeProps.x,
-        startLayerY: activeProps.y,
-        startWidth: activeProps.width,
-        startHeight: activeProps.height,
-        startRotation: activeProps.rotation,
+        startLayerX: dragProps.x,
+        startLayerY: dragProps.y,
+        startWidth: dragProps.width,
+        startHeight: dragProps.height,
+        startRotation: dragProps.rotation,
+        dragLayerId: dragLayer.id
       };
     }
 
@@ -212,10 +237,21 @@ export default function AnimationStage({
         setPanY(dragInfo.current.startPanY + dy);
       } else if (type === 'draw') {
         const coords = getStageCoords(currentX, currentY);
-        setDrawingPoints(prev => [...prev, coords]);
-      } else if (activeLayer && activeProps && !activeLayer.locked) {
+        drawingPointsRef.current.push(coords);
+        
+        // Update DOM element directly for performance
+        if (activeStrokeRef.current) {
+          const points = drawingPointsRef.current;
+          let pathData = '';
+          for (let i = 0; i < points.length; i++) {
+            pathData += (i === 0 ? 'M ' : ' L ') + `${points[i].x} ${points[i].y}`;
+          }
+          activeStrokeRef.current.setAttribute('d', pathData);
+        }
+      } else if (dragInfo.current.dragLayerId) {
         const dx = (currentX - dragInfo.current.startX) / zoom;
         const dy = (currentY - dragInfo.current.startY) / zoom;
+        const dragLid = dragInfo.current.dragLayerId;
 
         if (type === 'move') {
           let newX = dragInfo.current.startLayerX + dx;
@@ -226,8 +262,8 @@ export default function AnimationStage({
             newY = Math.round(newY / 10) * 10;
           }
 
-          onUpdateLayerProperty(activeLayer.id, 'x', newX);
-          onUpdateLayerProperty(activeLayer.id, 'y', newY);
+          onUpdateLayerProperty(dragLid, 'x', newX);
+          onUpdateLayerProperty(dragLid, 'y', newY);
         } else if (type === 'resize') {
           // Precise trigonometry sizing for rotated shapes!
           const theta = dragInfo.current.startRotation * (Math.PI / 180);
@@ -247,8 +283,8 @@ export default function AnimationStage({
             newH = Math.round(newH / 10) * 10;
           }
 
-          onUpdateLayerProperty(activeLayer.id, 'width', newW);
-          onUpdateLayerProperty(activeLayer.id, 'height', newH);
+          onUpdateLayerProperty(dragLid, 'width', newW);
+          onUpdateLayerProperty(dragLid, 'height', newH);
         } else if (type === 'rotate') {
           // Rotate shape based on angle of mouse from shape's center
           if (svgRef.current) {
@@ -274,7 +310,7 @@ export default function AnimationStage({
               newRotation = Math.round(newRotation / 15) * 15;
             }
 
-            onUpdateLayerProperty(activeLayer.id, 'rotation', newRotation);
+            onUpdateLayerProperty(dragLid, 'rotation', newRotation);
           }
         }
       }
@@ -298,14 +334,16 @@ export default function AnimationStage({
   };
 
   const finishDrawing = () => {
-    if (drawingPoints.length < 3) {
-      setDrawingPoints([]);
+    const points = drawingPointsRef.current;
+    if (points.length < 3) {
+      drawingPointsRef.current = [];
+      if (activeStrokeRef.current) activeStrokeRef.current.style.display = 'none';
       return;
     }
 
     // Find bounding box to normalize path coordinate centers
-    const xs = drawingPoints.map(p => p.x);
-    const ys = drawingPoints.map(p => p.y);
+    const xs = points.map(p => p.x);
+    const ys = points.map(p => p.y);
     const minX = Math.min(...xs);
     const maxX = Math.max(...xs);
     const minY = Math.min(...ys);
@@ -315,14 +353,14 @@ export default function AnimationStage({
     const centerY = (minY + maxY) / 2;
 
     // Shift all points so they are relative to the center
-    const relativePoints = drawingPoints.map(p => ({
+    const relativePoints = points.map(p => ({
       x: p.x - centerX,
       y: p.y - centerY,
     }));
 
     onAddFreeformLayer(relativePoints, { x: centerX, y: centerY });
-    setDrawingPoints([]);
-    setActiveTool('select');
+    drawingPointsRef.current = [];
+    if (activeStrokeRef.current) activeStrokeRef.current.style.display = 'none';
   };
 
   // Render a specific layer's vector elements
@@ -339,10 +377,17 @@ export default function AnimationStage({
     return (
       <g
         key={`${layer.id}-${index}-${isGhost ? 'ghost' : 'real'}`}
-        onClick={(e) => {
+        onMouseDown={(e) => {
           if (isGhost || layer.locked) return;
           e.stopPropagation();
           onSelectLayer(layer.id);
+          handleMouseDown(e, 'move', layer.id);
+        }}
+        onTouchStart={(e) => {
+          if (isGhost || layer.locked) return;
+          e.stopPropagation();
+          onSelectLayer(layer.id);
+          handleMouseDown(e, 'move', layer.id);
         }}
         style={{
           pointerEvents: isGhost || isPanningMode || activeTool === 'drawing' ? 'none' : 'auto'
@@ -562,6 +607,13 @@ export default function AnimationStage({
             transformOrigin: '0 0',
           }}
         >
+          {layers.length === 0 && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-600 pointer-events-none select-none">
+              <span className="text-2xl font-bold mb-2">Blank canvas</span>
+              <span className="text-sm">Add a shape, draw with a brush, or import an image to begin.</span>
+            </div>
+          )}
+
           {/* Main SVG Vector Canvas */}
           <svg
             id="animation-svg-canvas"
@@ -630,18 +682,18 @@ export default function AnimationStage({
             {renderSelectionHandles()}
 
             {/* Freeform Live Stroke Drawing line */}
-            {activeTool === 'drawing' && drawingPoints.length > 0 && (
-              <g id="live-drawing-preview" style={{ pointerEvents: 'none' }}>
-                <path
-                  d={drawingPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')}
-                  fill="none"
-                  stroke="#2dd4bf"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </g>
-            )}
+            <g id="live-drawing-preview" style={{ pointerEvents: 'none' }}>
+              <path
+                ref={activeStrokeRef}
+                d=""
+                fill="none"
+                stroke={activeTool === 'drawing' ? brushSettings.color : '#2dd4bf'}
+                strokeWidth={activeTool === 'drawing' ? brushSettings.size : 3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ display: 'none' }}
+              />
+            </g>
           </svg>
         </div>
 

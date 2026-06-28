@@ -156,17 +156,31 @@ export function RenderLayer({
     case 'freeform': {
       if (!layer.freeformPoints || layer.freeformPoints.length === 0) return null;
 
-      const pathData = layer.freeformPoints.map((p, i) =>
-        `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`
-      ).join(' ');
+      let pathData = '';
+      const points = layer.freeformPoints;
+      
+      if (!layer.freeformSmoothing || points.length < 3) {
+        pathData = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+      } else {
+        pathData = `M ${points[0].x} ${points[0].y}`;
+        for (let i = 1; i < points.length - 2; i++) {
+          const xc = (points[i].x + points[i + 1].x) / 2;
+          const yc = (points[i].y + points[i + 1].y) / 2;
+          pathData += ` Q ${points[i].x} ${points[i].y}, ${xc} ${yc}`;
+        }
+        pathData += ` Q ${points[points.length - 2].x} ${points[points.length - 2].y}, ${points[points.length - 1].x} ${points[points.length - 1].y}`;
+      }
+
+      // For freeform we often use strokeColor instead of fillColor for the lines
+      const activeStroke = strokeWidth > 0 ? strokeColor : fillColor;
 
       return (
         <path
           key={`${layer.id}-${index}-${isGhost ? 'ghost' : 'real'}`}
           id={`shape-path-${layer.id}`}
           d={pathData}
-          fill="none"
-          stroke={fillColor}
+          fill={fillColor === 'transparent' ? 'none' : fillColor}
+          stroke={activeStroke}
           strokeWidth={strokeWidth || 4}
           strokeLinecap="round"
           strokeLinejoin="round"

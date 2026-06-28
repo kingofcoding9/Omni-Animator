@@ -66,6 +66,10 @@ export function animatorReducer(state: AnimatorState, action: AnimatorAction): A
       };
     }
 
+    case 'START_TRANSACTION': {
+      return pushHistory(state, state);
+    }
+
     case 'SET_ACTIVE_LAYER': {
       return {
         ...state,
@@ -170,12 +174,16 @@ export function animatorReducer(state: AnimatorState, action: AnimatorAction): A
     }
 
     case 'ADD_FREEFORM_LAYER': {
-      const { points, center, currentFrame } = action.payload;
+      const { points, center, currentFrame, strokeColor, strokeWidth, smoothing } = action.payload;
       const past = pushHistoryState(state.past, state.project);
 
       const count = state.project.layers.filter(l => l.type === 'freeform').length + 1;
       const layerId = `layer-freeform-${Date.now()}`;
       const layerName = `Sketch ${count}`;
+
+      // Calculate bounds for width and height
+      const width = Math.max(10, Math.max(...points.map(p => p.x)) - Math.min(...points.map(p => p.x)));
+      const height = Math.max(10, Math.max(...points.map(p => p.y)) - Math.min(...points.map(p => p.y)));
 
       const defaultKf: Keyframe = {
         frame: currentFrame,
@@ -185,11 +193,11 @@ export function animatorReducer(state: AnimatorState, action: AnimatorAction): A
         scaleY: 1,
         rotation: 0,
         opacity: 1,
-        color: '#22d3ee', // high contrast cyan
-        strokeColor: '#22d3ee',
-        strokeWidth: 4,
-        width: 100,
-        height: 100,
+        color: 'transparent', 
+        strokeColor: strokeColor || '#22d3ee',
+        strokeWidth: strokeWidth || 4,
+        width,
+        height,
         fontSize: 24,
         easing: 'linear',
       };
@@ -201,7 +209,7 @@ export function animatorReducer(state: AnimatorState, action: AnimatorAction): A
         visible: true,
         locked: false,
         freeformPoints: points,
-        freeformSmoothing: true,
+        freeformSmoothing: smoothing !== undefined ? smoothing : true,
         keyframes: [defaultKf],
       };
 

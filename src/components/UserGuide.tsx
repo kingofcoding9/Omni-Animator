@@ -62,8 +62,8 @@ export default function UserGuide({ isOpen, onClose }: UserGuideProps) {
                   }}
                 />
                 <div className="relative z-10 text-center px-4">
-                  <h3 className="text-lg font-sans font-bold tracking-widest text-cyan-300 drop-shadow-md">OMNI-SCIENCE ANIMATION HUB</h3>
-                  <p className="text-xs text-slate-300 font-mono mt-1">High-fidelity keyframe interpolation engine</p>
+                  <h3 className="text-lg font-sans font-bold tracking-widest text-cyan-300 drop-shadow-md">ANIMATION CREATOR</h3>
+                  <p className="text-xs text-slate-300 font-mono mt-1">Draw and animate in the browser</p>
                 </div>
               </div>
 
@@ -76,7 +76,7 @@ export default function UserGuide({ isOpen, onClose }: UserGuideProps) {
                     <Info className="w-4 h-4" /> 1. What it does
                   </h3>
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    This software is an advanced browser-based vector 2D animation suite. Instead of rendering frame-by-frame pixels (which slows down your computer), it uses hardware-accelerated SVG elements and mathematical transforms. This allows you to scale, rotate, and animate shapes smoothly at high frame rates.
+                    This software lets you create 2D animations easily in your browser. You can scale, rotate, and animate shapes smoothly.
                   </p>
                 </div>
 
@@ -113,7 +113,7 @@ export default function UserGuide({ isOpen, onClose }: UserGuideProps) {
                 {/* 5. How layers work */}
                 <div id="guide-sec-5" className="p-4 bg-slate-950/50 rounded-xl border border-slate-800 space-y-2">
                   <h3 className="text-sm font-sans font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-2">
-                    <Layers className="w-4 h-4" /> 5. Layer System
+                    <Layers className="w-4 h-4" /> 5. Layers
                   </h3>
                   <p className="text-xs text-slate-300 leading-relaxed">
                     Every object belongs to its own layer. Layer order decides which element sits on top. Use the <strong>Layers Panel</strong> to hide layers, lock them to prevent accidental edits, duplicate them, rename them for organization, or delete them when they are no longer needed.
@@ -123,10 +123,10 @@ export default function UserGuide({ isOpen, onClose }: UserGuideProps) {
                 {/* 6. How keyframes work */}
                 <div id="guide-sec-6" className="p-4 bg-slate-950/50 rounded-xl border border-slate-800 space-y-2">
                   <h3 className="text-sm font-sans font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-2">
-                    <Key className="w-4 h-4" /> 6. Keyframes &amp; Tweening
+                    <Key className="w-4 h-4" /> 6. Keyframes &amp; Smooth Motion
                   </h3>
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    A keyframe stores an object's properties at a specific frame index. If you place a keyframe on frame 0, move the object, and place another keyframe on frame 24, our engine automatically calculates the intermediate states (tweening) using mathematical curves for continuous, stutter-free playback.
+                    A keyframe stores an object's properties at a specific frame index. If you place a keyframe on frame 0, move the object, and place another keyframe on frame 24, the app automatically calculates the smooth motion between them for continuous playback.
                   </p>
                 </div>
 

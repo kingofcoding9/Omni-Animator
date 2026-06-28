@@ -20,6 +20,12 @@ import {
 } from 'lucide-react';
 import { ShapeType } from '../types';
 
+export interface BrushSettings {
+  size: number;
+  color: string;
+  smoothing: boolean;
+}
+
 interface ToolPanelProps {
   onAddShape: (type: ShapeType) => void;
   onOpenGuide: () => void;
@@ -31,6 +37,8 @@ interface ToolPanelProps {
   setGridSnap: (snap: boolean) => void;
   activeTool: ShapeType | 'select' | 'drawing';
   setActiveTool: (tool: ShapeType | 'select' | 'drawing') => void;
+  brushSettings: BrushSettings;
+  setBrushSettings: (settings: BrushSettings) => void;
 }
 
 export default function ToolPanel({
@@ -44,6 +52,8 @@ export default function ToolPanel({
   setGridSnap,
   activeTool,
   setActiveTool,
+  brushSettings,
+  setBrushSettings,
 }: ToolPanelProps) {
   const tools: { type: ShapeType; label: string; icon: React.ReactNode }[] = [
     { type: 'circle', label: 'Circle', icon: <Circle className="w-5 h-5 text-sky-400" /> },
@@ -52,7 +62,6 @@ export default function ToolPanel({
     { type: 'line', label: 'Line', icon: <Minus className="w-5 h-5 text-emerald-400" /> },
     { type: 'text', label: 'Text', icon: <Type className="w-5 h-5 text-amber-400" /> },
     { type: 'image', label: 'Sprite / Image', icon: <Image className="w-5 h-5 text-rose-400" /> },
-    { type: 'freeform', label: 'Freeform Draw', icon: <PenTool className="w-5 h-5 text-teal-400" /> },
   ];
 
   return (
@@ -145,23 +154,33 @@ export default function ToolPanel({
               <span>Select / Transform</span>
             </button>
 
+            {/* Draw Tool */}
+            <button
+              id="tool-draw"
+              onClick={() => setActiveTool('drawing')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-sans font-semibold transition-all duration-150 border text-left cursor-pointer ${
+                activeTool === 'drawing'
+                  ? 'bg-gradient-to-r from-teal-500/20 to-emerald-500/10 border-teal-500/50 text-white shadow-lg shadow-teal-950/20'
+                  : 'bg-slate-850/40 hover:bg-slate-800 border-slate-800/80 text-slate-300 hover:text-white'
+              }`}
+            >
+              <span className="p-1 rounded-md bg-slate-950">
+                <PenTool className="w-4 h-4 text-teal-400" />
+              </span>
+              <span>Draw (Pencil)</span>
+            </button>
+
+            <div className="h-px w-full bg-slate-800/60 my-2"></div>
+
             {tools.map((tool) => (
               <button
                 key={tool.type}
                 id={`add-${tool.type}-btn`}
                 onClick={() => {
                   onAddShape(tool.type);
-                  if (tool.type === 'freeform') {
-                    setActiveTool('drawing');
-                  } else {
-                    setActiveTool('select');
-                  }
+                  setActiveTool('select');
                 }}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-sans font-semibold transition-all duration-150 border text-left cursor-pointer ${
-                  activeTool === 'drawing' && tool.type === 'freeform'
-                    ? 'bg-cyan-500/20 border-cyan-500 text-white shadow-lg shadow-cyan-950/20'
-                    : 'bg-slate-850/40 hover:bg-slate-800 border-slate-800/80 text-slate-300 hover:text-white'
-                }`}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-sans font-semibold transition-all duration-150 border text-left cursor-pointer bg-slate-850/40 hover:bg-slate-800 border-slate-800/80 text-slate-300 hover:text-white`}
               >
                 <span className="p-1 rounded-md bg-slate-950">
                   {tool.icon}
@@ -171,6 +190,47 @@ export default function ToolPanel({
             ))}
           </div>
         </div>
+
+        {activeTool === 'drawing' && (
+          <div className="space-y-3 p-3 bg-slate-850 rounded-xl border border-slate-800">
+            <div className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Brush Options</div>
+            
+            <div className="space-y-1">
+              <label className="text-[10px] text-slate-400">Brush Size: {brushSettings.size}px</label>
+              <input 
+                type="range" 
+                min="1" 
+                max="50" 
+                value={brushSettings.size}
+                onChange={(e) => setBrushSettings({ ...brushSettings, size: parseInt(e.target.value) })}
+                className="w-full accent-teal-500"
+              />
+            </div>
+            
+            <div className="space-y-1">
+              <label className="text-[10px] text-slate-400">Color</label>
+              <div className="flex gap-2 items-center">
+                <input 
+                  type="color" 
+                  value={brushSettings.color}
+                  onChange={(e) => setBrushSettings({ ...brushSettings, color: e.target.value })}
+                  className="w-8 h-8 rounded cursor-pointer bg-slate-900 border-none"
+                />
+                <span className="text-[10px] font-mono text-slate-300">{brushSettings.color}</span>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={brushSettings.smoothing}
+                onChange={(e) => setBrushSettings({ ...brushSettings, smoothing: e.target.checked })}
+                className="rounded border-slate-700 text-teal-500 bg-slate-900 focus:ring-teal-500"
+              />
+              <span className="text-xs text-slate-300">Smooth Stroke</span>
+            </label>
+          </div>
+        )}
       </div>
 
       {/* Manual & Credit Footer */}

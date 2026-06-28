@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Play, 
   Pause, 
@@ -23,7 +23,7 @@ interface TimelineProps {
   layers: Layer[];
   activeLayerId: string | null;
   currentFrame: number;
-  setCurrentFrame: React.Dispatch<React.SetStateAction<number>>;
+  setCurrentFrame: (frame: number) => void;
   onionSkinEnabled: boolean;
   setOnionSkinEnabled: (enabled: boolean) => void;
   fps: number;
@@ -62,6 +62,11 @@ export default function Timeline({
   const playTimerRef = useRef<number | null>(null);
   const lastTickRef = useRef<number>(0);
   const rulerRef = useRef<HTMLDivElement>(null);
+  const currentFrameRef = useRef(currentFrame);
+  
+  useEffect(() => {
+    currentFrameRef.current = currentFrame;
+  }, [currentFrame]);
 
   // Playback Loop via requestAnimationFrame
   useEffect(() => {
@@ -81,18 +86,16 @@ export default function Timeline({
           const framesToAdvance = Math.floor(accumulator / frameInterval);
           accumulator %= frameInterval;
 
-          setCurrentFrame((prev) => {
-            const nextFrame = prev + framesToAdvance;
-            if (nextFrame >= totalFrames) {
-              if (isLooping) {
-                return 0;
-              } else {
-                setIsPlaying(false);
-                return totalFrames - 1;
-              }
+          let nextFrame = currentFrameRef.current + framesToAdvance;
+          if (nextFrame >= totalFrames) {
+            if (isLooping) {
+              nextFrame = 0;
+            } else {
+              setIsPlaying(false);
+              nextFrame = totalFrames - 1;
             }
-            return nextFrame;
-          });
+          }
+          setCurrentFrame(nextFrame);
         }
         playTimerRef.current = requestAnimationFrame(tick);
       };
@@ -154,6 +157,18 @@ export default function Timeline({
   const handleRulerMouseMove = (e: React.MouseEvent) => {
     if (isScrubbingRuler) {
       handleRulerScrub(e.clientX);
+    } else if (draggingKeyframe) {
+      // If we are dragging a keyframe, update its position visually based on mouse X
+      if (!rulerRef.current) return;
+      const rect = rulerRef.current.getBoundingClientRect();
+      const relativeX = e.clientX - rect.left;
+      const percentage = Math.max(0, Math.min(1, relativeX / rect.width));
+      const targetFrame = Math.round(percentage * (totalFrames - 1));
+      
+      if (targetFrame !== draggingKeyframe.fromFrame) {
+         onMoveKeyframe(draggingKeyframe.layerId, draggingKeyframe.fromFrame, targetFrame);
+         setDraggingKeyframe({ layerId: draggingKeyframe.layerId, fromFrame: targetFrame });
+      }
     }
   };
 
@@ -161,14 +176,6 @@ export default function Timeline({
   const handleKeyframeMouseDown = (e: React.MouseEvent, layerId: string, frame: number) => {
     e.stopPropagation();
     if (e.button === 0) { // left click
-      setDraggingKeyframe({ layerId, fromFrame: frame });
-    }
-  };
-
-  const handleCellMouseEnter = (layerId: string, frame: number) => {
-    if (draggingKeyframe && draggingKeyframe.layerId === layerId && draggingKeyframe.fromFrame !== frame) {
-      // Shift keyframe position in real-time!
-      onMoveKeyframe(layerId, draggingKeyframe.fromFrame, frame);
       setDraggingKeyframe({ layerId, fromFrame: frame });
     }
   };
@@ -181,6 +188,25 @@ export default function Timeline({
     }
   };
 
+  const handleTrackClick = (e: React.MouseEvent, layerId: string) => {
+     if (!rulerRef.current) return;
+     const rect = rulerRef.current.getBoundingClientRect();
+     const relativeX = e.clientX - rect.left;
+     const percentage = Math.max(0, Math.min(1, relativeX / rect.width));
+     const targetFrame = Math.round(percentage * (totalFrames - 1));
+     setCurrentFrame(targetFrame);
+  };
+
+  const handleTrackDoubleClick = (e: React.MouseEvent, layerId: string) => {
+     if (!rulerRef.current) return;
+     const rect = rulerRef.current.getBoundingClientRect();
+     const relativeX = e.clientX - rect.left;
+     const percentage = Math.max(0, Math.min(1, relativeX / rect.width));
+     const targetFrame = Math.round(percentage * (totalFrames - 1));
+     const hasKf = layers.find(l => l.id === layerId)?.keyframes.some(k => k.frame === targetFrame);
+     handleCellDoubleClick(layerId, targetFrame, !!hasKf);
+  };
+
   // Format timestamp strings
   const formatTime = (frameIdx: number) => {
     const totalSecs = frameIdx / fps;
@@ -189,6 +215,16 @@ export default function Timeline({
     const centis = Math.floor((totalSecs % 1) * 100);
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${centis.toString().padStart(2, '0')}`;
   };
+
+  // Determine tick steps to avoid rendering thousands of ticks
+  const tickStep = totalFrames > 300 ? Math.ceil(totalFrames / 50) : (totalFrames > 100 ? 5 : 1);
+  const ticks = [];
+  for (let i = 0; i < totalFrames; i += tickStep) {
+     ticks.push(i);
+  }
+  if (ticks[ticks.length - 1] !== totalFrames - 1) {
+     ticks.push(totalFrames - 1);
+  }
 
   return (
     <div id="timeline-container" className="bg-slate-900/60 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 flex flex-col gap-4 select-none shadow-xl shadow-slate-950/20">
@@ -322,7 +358,11 @@ export default function Timeline({
       </div>
 
       {/* 2. Timeline Grid tracks scrubber */}
-      <div id="timeline-scrubber" className="bg-slate-950 border border-slate-850 rounded-2xl overflow-hidden flex flex-col">
+      <div 
+        id="timeline-scrubber" 
+        className="bg-slate-950 border border-slate-850 rounded-2xl overflow-hidden flex flex-col"
+        onMouseMove={handleRulerMouseMove}
+      >
         
         {/* Scrubber Rule header bar */}
         <div className="flex border-b border-slate-850 bg-slate-950/80">
@@ -337,7 +377,6 @@ export default function Timeline({
             ref={rulerRef}
             className="flex-1 relative h-8 cursor-ew-resize bg-slate-950"
             onMouseDown={handleRulerMouseDown}
-            onMouseMove={handleRulerMouseMove}
           >
             {/* Playhead cyan vertical line */}
             <div 
@@ -351,34 +390,29 @@ export default function Timeline({
             </div>
 
             {/* Render Ticks */}
-            <div className="absolute inset-0 flex justify-between px-1">
-              {Array.from({ length: totalFrames }).map((_, fIdx) => {
-                const isMajor = fIdx % 5 === 0;
-                const isLabel = fIdx % 10 === 0 || fIdx === 0 || fIdx === totalFrames - 1;
-
-                return (
+            {ticks.map((fIdx) => {
+               const isMajor = fIdx % 5 === 0;
+               const isLabel = fIdx % 10 === 0 || fIdx === 0 || fIdx === totalFrames - 1;
+               return (
                   <div 
                     key={`tick-${fIdx}`}
-                    className="flex flex-col items-center justify-between h-full"
-                    style={{ width: `${100 / totalFrames}%` }}
+                    className="absolute top-0 bottom-0 flex flex-col items-center justify-between"
+                    style={{ left: `${(fIdx / (totalFrames - 1)) * 100}%`, transform: 'translateX(-50%)' }}
                   >
                     <div className={`w-[1px] ${isMajor ? 'h-3 bg-slate-600' : 'h-1.5 bg-slate-800'}`} />
-                    {isLabel ? (
-                      <span className="text-[8px] font-mono text-slate-400 select-none pb-1">
-                        {fIdx}
-                      </span>
-                    ) : (
-                      <div className="h-2" />
+                    {isLabel && (
+                       <span className="text-[8px] font-mono text-slate-400 select-none pb-1">
+                         {fIdx}
+                       </span>
                     )}
                   </div>
-                );
-              })}
-            </div>
+               );
+            })}
           </div>
         </div>
 
         {/* Tracks lists rows */}
-        <div className="max-h-40 overflow-y-auto divide-y divide-slate-900 scrollbar-thin scrollbar-thumb-slate-850">
+        <div className="max-h-40 overflow-y-auto overflow-x-hidden divide-y divide-slate-900 scrollbar-thin scrollbar-thumb-slate-850">
           {layers.map((layer) => {
             const isLayerActive = layer.id === activeLayerId;
 
@@ -400,8 +434,13 @@ export default function Timeline({
                   </span>
                 </div>
 
-                {/* Track cells frame boxes */}
-                <div className="flex-1 relative flex items-center justify-between px-1 bg-slate-950/20">
+                {/* Track cell area */}
+                <div 
+                  className="flex-1 relative flex items-center justify-between bg-slate-950/20 cursor-pointer overflow-hidden h-9"
+                  onClick={(e) => handleTrackClick(e, layer.id)}
+                  onDoubleClick={(e) => handleTrackDoubleClick(e, layer.id)}
+                  title="Click to jump. Double click to add/remove keyframe."
+                >
                   {/* Vertical playhead tracker line background */}
                   <div 
                     className="absolute top-0 bottom-0 w-[1px] bg-cyan-500/20 pointer-events-none"
@@ -410,51 +449,40 @@ export default function Timeline({
                     }}
                   />
 
-                  {Array.from({ length: totalFrames }).map((_, fIdx) => {
-                    const keyframe = layer.keyframes.find(kf => kf.frame === fIdx);
-                    const isCurrent = fIdx === currentFrame;
-
-                    return (
-                      <div
-                        key={`cell-${layer.id}-${fIdx}`}
-                        id={`cell-${layer.id}-${fIdx}`}
-                        onMouseEnter={() => handleCellMouseEnter(layer.id, fIdx)}
-                        onDoubleClick={() => handleCellDoubleClick(layer.id, fIdx, !!keyframe)}
-                        onClick={() => setCurrentFrame(fIdx)}
-                        className={`h-9 flex items-center justify-center cursor-pointer border-r border-slate-900/30 group relative transition-colors ${
-                          isCurrent ? 'bg-slate-850/40' : 'hover:bg-slate-850/20'
-                        }`}
-                        style={{ width: `${100 / totalFrames}%` }}
-                        title="Click to jump. Double click to add/remove keyframe."
-                      >
-                        {keyframe ? (
-                          <div
-                            id={`keyframe-${layer.id}-${fIdx}`}
-                            onMouseDown={(e) => handleKeyframeMouseDown(e, layer.id, fIdx)}
-                            className={`w-3.5 h-3.5 transform rotate-45 border transition-all shadow ${
-                              isCurrent 
-                                ? 'bg-amber-400 border-white scale-110 shadow-amber-500/30 animate-pulse' 
-                                : 'bg-amber-600 border-amber-950 hover:bg-amber-500'
-                            }`}
-                            title="Keyframe (Hold &amp; Drag to shift frame position)"
-                          />
-                        ) : (
-                          <div className="w-1.5 h-1.5 rounded-full bg-slate-800 group-hover:bg-slate-600 transition-colors" />
-                        )}
-                      </div>
-                    );
+                  {layer.keyframes.map((kf) => {
+                     const isCurrent = kf.frame === currentFrame;
+                     return (
+                        <div
+                           key={`kf-${layer.id}-${kf.frame}`}
+                           className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10"
+                           style={{ left: `${(kf.frame / (totalFrames - 1)) * 100}%` }}
+                           onMouseDown={(e) => handleKeyframeMouseDown(e, layer.id, kf.frame)}
+                           onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              handleCellDoubleClick(layer.id, kf.frame, true);
+                           }}
+                        >
+                           <div
+                              className={`w-3.5 h-3.5 transform rotate-45 border transition-all shadow ${
+                                isCurrent 
+                                  ? 'bg-amber-400 border-white scale-110 shadow-amber-500/30' 
+                                  : 'bg-amber-600 border-amber-950 hover:bg-amber-500'
+                              }`}
+                              title={`Keyframe at frame ${kf.frame} (Hold & Drag to shift)`}
+                           />
+                        </div>
+                     )
                   })}
                 </div>
               </div>
             );
           })}
         </div>
-
       </div>
 
       {/* Double click instruction helper */}
       <p className="text-[10px] text-slate-500 text-center font-mono mt-0.5">
-        💡 Double-click any cell in a layer track to **Add Keyframe**. Double-click a diamond to **Remove Keyframe**. Hold and drag a diamond left or right to **Slide its Frame**.
+        💡 Double-click any track to **Add Keyframe**. Double-click a diamond to **Remove Keyframe**. Hold and drag a diamond left or right to **Slide its Frame**.
       </p>
 
     </div>
